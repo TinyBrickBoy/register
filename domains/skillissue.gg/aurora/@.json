@@ -1,6 +1,9 @@
 {
     "records":  {
-                    "CNAME":  "supernova-production-effe.up.railway.app"
+                    "CNAME":  "supernova-production-effe.up.railway.app",
+                    "TXT":  {
+                                "_railway-verify":  "railway-verify=5be397286a026674475780f7826aa5bf67ecff58f9156e09068c55d5b0fb34b3"
+                            }
                 },
     "description":  "SUPERNOVA aurora-themed cosmic apparel",
     "owner":  {

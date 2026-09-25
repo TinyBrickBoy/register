@@ -48,6 +48,9 @@ function collectRecords(domain) {
       for (const [type, value] of Object.entries(recs)) {
         const values = Array.isArray(value) ? value : [value];
         for (const v of values) {
+          if (typeof v !== "string" && typeof v !== "number") {
+            throw new Error(`${domain}: ${sub}/${file} ${type} value must be a string, got ${JSON.stringify(v)}`);
+          }
           records.push({ name, type, data: String(v) });
         }
       }
@@ -67,6 +70,7 @@ function summarize(text) {
 }
 
 async function deployZone(domain, productId) {
+  // Throws on malformed files, so a broken zone is never pushed.
   const records = collectRecords(domain);
   const body = JSON.stringify({ productId, records });
 

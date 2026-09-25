@@ -95,7 +95,8 @@ module.exports = async function validate({ github, context, core }) {
 
     // 5) Validate the folder name (and the record label, unless it is the apex).
     const nameErrors = validateName(sub);
-    if (!isApex) nameErrors.push(...validateName(label));
+    // Record labels may start with "_" (e.g. `_railway-verify` for TXT verification).
+    if (!isApex) nameErrors.push(...validateName(label.replace(/^_/, "")));
     if (nameErrors.length) {
       errors.push(...nameErrors.map((e) => `\`${fqdn}\`: ${e}`));
       continue;
@@ -246,6 +247,12 @@ function validateContent(data, isApex) {
   for (const t of types) {
     if (!ALLOWED_RECORD_TYPES.includes(t)) {
       errors.push(`unsupported record type \`${t}\` (allowed: ${ALLOWED_RECORD_TYPES.join(", ")})`);
+    }
+  }
+  for (const [t, value] of Object.entries(data.records)) {
+    const values = Array.isArray(value) ? value : [value];
+    if (values.length === 0 || values.some((v) => typeof v !== "string" || v.trim() === "")) {
+      errors.push(`\`${t}\` must be a string or a list of strings (for a record on another name like \`_verify\`, add a separate \`_verify.json\` file)`);
     }
   }
   if (types.includes("CNAME") && types.length > 1) {

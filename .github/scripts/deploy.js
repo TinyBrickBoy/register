@@ -56,22 +56,53 @@ function collectRecords(domain) {
   return records;
 }
 
+const MAX_ATTEMPTS = 4;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Keep logs readable: Cloudflare error pages are full HTML documents.
+function summarize(text) {
+  const title = text.match(/<title>([^<]*)<\/title>/i);
+  if (title) return title[1].trim();
+  return text.length > 300 ? `${text.slice(0, 300)}...` : text;
+}
+
 async function deployZone(domain, productId) {
   const records = collectRecords(domain);
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${API_KEY}`,
-    },
-    body: JSON.stringify({ productId, records }),
-  });
+  const body = JSON.stringify({ productId, records });
 
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`${domain}: HTTP ${res.status} ${text}`);
+  for (let attempt = 1; ; attempt++) {
+    let res, text;
+    try {
+      res = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`,
+        },
+        body,
+      });
+      text = await res.text();
+    } catch (e) {
+      if (attempt >= MAX_ATTEMPTS) throw new Error(`${domain}: ${e.message}`);
+      console.log(`[retry] ${domain}: ${e.message} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+      await sleep(5000 * 2 ** (attempt - 1));
+      continue;
+    }
+
+    if (res.ok) {
+      console.log(`[ok]   ${domain}: pushed ${records.length} record(s) (HTTP ${res.status})`);
+      return;
+    }
+
+    // 5xx and 429 are usually temporary (e.g. skrime.eu behind Cloudflare
+    // returning 502 while the origin restarts), so try again with backoff.
+    const retryable = res.status >= 500 || res.status === 429;
+    if (!retryable || attempt >= MAX_ATTEMPTS) {
+      throw new Error(`${domain}: HTTP ${res.status} ${summarize(text)}`);
+    }
+    console.log(`[retry] ${domain}: HTTP ${res.status} ${summarize(text)} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+    await sleep(5000 * 2 ** (attempt - 1));
   }
-  console.log(`[ok]   ${domain}: pushed ${records.length} record(s) (HTTP ${res.status})`);
 }
 
 (async () => {

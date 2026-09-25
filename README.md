@@ -110,6 +110,8 @@ Netlify, a server IP, …) at it and you're online.
 | `@.json` must contain an `owner.github` | Anchors who owns the folder |
 | At least one record under `records` | A subdomain has to point somewhere |
 | `CNAME` cannot be combined with other record types | DNS spec |
+| Every value is a plain string in the right format (`A` = IPv4, `AAAA` = IPv6, `CNAME` = one hostname, `MX` = `10 mail.example.net`, `TXT` without quotes) | Broken values would make the whole zone fail to deploy |
+| A record on another name (e.g. `_railway-verify`) goes in its own file `<subdomain>/_railway-verify.json` | One file = one DNS name |
 | Names like `www`, `api`, `mail`, `ns1` … are reserved | Infrastructure protection |
 
 ---

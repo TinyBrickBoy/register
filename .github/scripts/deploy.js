@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { validateContent } = require("./validate-pr.js");
 
 const API_URL = process.env.SKRIME_API_URL;
 const API_KEY = process.env.SKRIME_API_KEY;
@@ -43,15 +44,21 @@ function collectRecords(domain) {
       const label = file.replace(/\.json$/, "");
       const name = label === "@" ? sub : `${label}.${sub}`;
 
-      const data = JSON.parse(fs.readFileSync(path.join(subDir, file), "utf8"));
+      const where = `${domain}: ${sub}/${file}`;
+      let data;
+      try {
+        data = JSON.parse(fs.readFileSync(path.join(subDir, file), "utf8"));
+      } catch (e) {
+        throw new Error(`${where} is not valid JSON: ${e.message}`);
+      }
+      const problems = validateContent(data, label === "@");
+      if (problems.length) throw new Error(`${where}: ${problems.join("; ")}`);
+
       const recs = data.records || {};
       for (const [type, value] of Object.entries(recs)) {
         const values = Array.isArray(value) ? value : [value];
         for (const v of values) {
-          if (typeof v !== "string" && typeof v !== "number") {
-            throw new Error(`${domain}: ${sub}/${file} ${type} value must be a string, got ${JSON.stringify(v)}`);
-          }
-          records.push({ name, type, data: String(v) });
+          records.push({ name, type, data: v });
         }
       }
     }

@@ -21,6 +21,8 @@
 //      folder, the PR author must be the owner recorded in that folder's
 //      `@.json` on the base branch. If not, the PR is closed automatically.
 
+const net = require("net");
+
 const MARKER = "<!-- subdomain-bot -->";
 
 const ALLOWED_RECORD_TYPES = ["A", "AAAA", "CNAME", "ALIAS", "MX", "SRV", "TXT", "CAA"];
@@ -250,16 +252,65 @@ function validateContent(data, isApex) {
     }
   }
   for (const [t, value] of Object.entries(data.records)) {
-    const values = Array.isArray(value) ? value : [value];
-    if (values.length === 0 || values.some((v) => typeof v !== "string" || v.trim() === "")) {
-      errors.push(`\`${t}\` must be a string or a list of strings (for a record on another name like \`_verify\`, add a separate \`_verify.json\` file)`);
-    }
+    if (ALLOWED_RECORD_TYPES.includes(t)) errors.push(...validateValues(t, value));
   }
   if (types.includes("CNAME") && types.length > 1) {
     errors.push("a `CNAME` record cannot be combined with other record types");
   }
   if (types.includes("NS") && types.some((t) => t !== "NS")) {
     errors.push("`NS` records cannot be combined with other record types");
+  }
+  return errors;
+}
+
+const HOST = /^(?=.{1,253}\.?$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.?$/i;
+
+// Checks the value(s) of one record type. Returns a list of error strings.
+function validateValues(type, value) {
+  const values = Array.isArray(value) ? value : [value];
+  if (values.length === 0) return [`\`${type}\` must not be an empty list`];
+
+  const errors = [];
+  for (const v of values) {
+    if (typeof v !== "string" || v.trim() === "") {
+      errors.push(`\`${type}\` values must be non-empty strings, got \`${JSON.stringify(v)}\` (for a record on another name like \`_verify\`, add a separate \`_verify.json\` file)`);
+      continue;
+    }
+    const bad = (hint) => errors.push(`\`${type}\` value \`${v}\` is invalid: ${hint}`);
+    switch (type) {
+      case "A":
+        if (!net.isIPv4(v)) bad("expected an IPv4 address like `185.199.108.153`");
+        break;
+      case "AAAA":
+        if (!net.isIPv6(v)) bad("expected an IPv6 address like `2606:50c0:8000::153`");
+        break;
+      case "CNAME":
+      case "ALIAS":
+        if (!HOST.test(v)) bad("expected a hostname like `target.example.net`");
+        break;
+      case "MX": {
+        const m = v.match(/^(\d{1,5}) (\S+)$/);
+        if (!m || Number(m[1]) > 65535 || !HOST.test(m[2])) bad("expected `<priority> <host>`, e.g. `10 mail.example.net`");
+        break;
+      }
+      case "SRV": {
+        const m = v.match(/^(\d{1,5}) (\d{1,5}) (\d{1,5}) (\S+)$/);
+        if (!m || m.slice(1, 4).some((n) => Number(n) > 65535) || !(m[4] === "." || HOST.test(m[4]))) {
+          bad("expected `<priority> <weight> <port> <target>`, e.g. `10 5 25565 mc.example.net`");
+        }
+        break;
+      }
+      case "CAA":
+        if (!/^\d{1,3} (issue|issuewild|iodef) \S+$/.test(v)) bad("expected `<flags> <tag> <value>`, e.g. `0 issue letsencrypt.org`");
+        break;
+      case "TXT":
+        if (/^".*"$/.test(v)) bad("leave out the surrounding quotes, they are added automatically");
+        else if (v.length > 2048) bad("longer than 2048 characters");
+        break;
+    }
+  }
+  if ((type === "CNAME" || type === "ALIAS") && values.length > 1) {
+    errors.push(`\`${type}\` must be a single hostname, not a list`);
   }
   return errors;
 }
@@ -313,3 +364,6 @@ async function setLabels(github, owner, repo, issue_number, labels) {
   } catch (e) { /* ignore */ }
   await github.rest.issues.addLabels({ owner, repo, issue_number, labels }).catch(() => {});
 }
+
+// Reused by deploy.js so a broken file can never reach the DNS API.
+module.exports.validateContent = validateContent;

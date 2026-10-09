@@ -1,14 +1,21 @@
 name: Deploy DNS
 
 # After a change lands on main, push every domain's records to the skrime.eu
-# DNS API. The API replaces the whole zone, so we always submit the full set.
+# DNS API. The API can only get or replace a whole zone, so deploy.js first
+# fetches the live zone, keeps the records the repo does not manage (apex,
+# mail, www, ...) and submits them together with the records from domains/.
 on:
   push:
     branches: [main]
     paths:
       - "domains/**"
       - ".github/scripts/deploy.js"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only print the merged zones, push nothing"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,7 +29,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Full history: deploy.js reads it to find deleted subdomain folders.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -34,3 +44,4 @@ jobs:
           SKRIME_API_URL: ${{ secrets.SKRIME_API_URL }}
           SKRIME_API_KEY: ${{ secrets.SKRIME_API_KEY }}
           SKRIME_PRODUCTS: ${{ secrets.SKRIME_PRODUCTS }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}

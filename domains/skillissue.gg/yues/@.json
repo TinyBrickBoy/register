@@ -1,0 +1,10 @@
+{
+  "owner": {
+    "github": "initial2024",
+    "email": "kango99w@gmail.com"
+  },
+  "description": "Personal homepage hosted on Cloudflare Pages",
+  "records": {
+    "CNAME": "kango99w-homepage.pages.dev"
+  }
+}

@@ -27,6 +27,7 @@ concurrency:
 
 jobs:
   deploy:
+    runs-on: ubuntu-slim
     steps:
       # Full history: deploy.js reads it to find deleted subdomain folders.
       - uses: actions/checkout@v4

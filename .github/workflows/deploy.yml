@@ -27,8 +27,6 @@ concurrency:
 
 jobs:
   deploy:
-    # Self-hosted: POSTs from GitHub-hosted runners get 502 from skrime.
-    runs-on: self-hosted
     steps:
       # Full history: deploy.js reads it to find deleted subdomain folders.
       - uses: actions/checkout@v4
